@@ -58,6 +58,9 @@ button { cursor: pointer; }
 .button.secondary { color: var(--ink); background: #eeebe7; }
 .button.small { padding: 8px 12px; font-size: 12px; }
 .icon-button { border: 0; border-radius: 9px; padding: 10px 13px; color: var(--muted); background: #eeebe7; }
+.workspace-search { display: flex; align-items: center; gap: 6px; }
+.workspace-search form { display: flex; }
+.workspace-search input { width: min(360px, 42vw); padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
 .website-grid, .template-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px; }
 .website-card, .template-card { border: 1px solid var(--line); border-radius: 17px; background: var(--surface); box-shadow: 0 7px 24px rgba(45,31,24,.04); overflow: hidden; }
 .website-preview { display: flex; flex-direction: column; justify-content: end; gap: 6px; height: 180px; padding: 22px; color: #3b2b27; }
@@ -149,6 +152,8 @@ legend { padding: 0 5px; color: var(--muted); font-size: 12px; }
 .public-modules { max-width: 1000px; margin: 0 auto; padding: 0 clamp(24px, 8vw, 100px) 90px; }
 .public-modules > .card { max-width: none; margin: 18px 0; }
 .public-loading { display: grid; min-height: 60vh; place-items: center; color: var(--muted); }
+.public-footer { display: flex; flex-wrap: wrap; gap: 18px; max-width: 1000px; margin: 0 auto; padding: 28px clamp(24px, 8vw, 100px) 50px; border-top: 1px solid #eee6e0; color: #806d67; font-size: 13px; }
+.public-footer strong { color: #332b2a; }
 .management-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(280px, .8fr); gap: 24px; align-items: start; }
 .card-list { display: grid; gap: 12px; }
 .management-card { display: flex; align-items: center; gap: 16px; }
@@ -170,6 +175,8 @@ legend { padding: 0 5px; color: var(--muted); font-size: 12px; }
 .agenda-row p { margin: 5px 0 0; color: var(--muted); }
 .agenda-row select { width: auto; }
 .notice.error { color: #a63d3d; background: #fff0ef; border: 1px solid #f2c5c0; padding: 12px 16px; border-radius: 10px; }
+.site-switcher { display: grid; gap: 4px; padding: 12px; margin: 6px 0 18px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.site-switcher small { color: var(--muted); }
 .inline-dialog { display: flex; gap: 10px; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--line); background: #fff; }
 .page-list { display: grid; gap: 5px; margin-bottom: 22px; }
 .page-list-item { display: flex; align-items: center; gap: 4px; border-radius: 8px; }

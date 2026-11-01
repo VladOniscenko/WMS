@@ -22,7 +22,7 @@ public sealed class CustomerModule : IModule
  {
   if(!IsStaff(user)||t.BusinessId is not Guid b)return Results.Forbid();
   page=Math.Max(1,page);pageSize=Math.Clamp(pageSize,1,100);
-  var all=await r.FindAsync(x=>x.BusinessId==b&&(string.IsNullOrWhiteSpace(search)||x.Email.Contains(search)||
+  var all=await r.FindAsync(x=>x.BusinessId==b&&(!t.WebsiteId.HasValue||x.VisitedWebsiteIds.Contains(t.WebsiteId.Value))&&(string.IsNullOrWhiteSpace(search)||x.Email.Contains(search)||
    (x.FirstName!=null&&x.FirstName.Contains(search))||(x.LastName!=null&&x.LastName.Contains(search))),ct);
   return Results.Ok(new{page,pageSize,total=all.Count,items=all.Skip((page-1)*pageSize).Take(pageSize)});
  }

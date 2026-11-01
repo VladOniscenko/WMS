@@ -9,7 +9,7 @@ function PageHeader({ eyebrow, title, action }: { eyebrow: string; title: string
   return <div className="section-heading"><div><p className="eyebrow">{eyebrow}</p><h2>{title}</h2></div>{action}</div>
 }
 
-export function EmployeesManagement() {
+export function EmployeesManagement({ websiteId }: { websiteId: string }) {
   const [items, setItems] = useState<EmployeeProfile[]>([])
   const [form, setForm] = useState({ displayName: '', email: '', roleTitle: 'Nail artist', bio: '' })
   const [error, setError] = useState('')
@@ -17,7 +17,7 @@ export function EmployeesManagement() {
   useEffect(() => { void load() }, [])
   async function create(event: FormEvent) {
     event.preventDefault()
-    try { await employeesApi.create({ ...form, assignedWebsiteIds: [], skillTags: [], isActive: true }); setForm({ displayName: '', email: '', roleTitle: 'Nail artist', bio: '' }); await load() } catch { setError('Employee could not be created.') }
+    try { await employeesApi.create({ ...form, assignedWebsiteIds: [websiteId], skillTags: [], isActive: true }); setForm({ displayName: '', email: '', roleTitle: 'Nail artist', bio: '' }); await load() } catch { setError('Employee could not be created.') }
   }
   return <section><PageHeader eyebrow="People" title="Employees" action={<button className="button primary" onClick={() => document.getElementById('new-employee')?.scrollIntoView()}>＋ Add employee</button>} />{error && <p className="notice error">{error}</p>}<div className="management-grid"><div className="card-list">{items.map(item => <article className="card management-card" key={item.id}><div className="avatar">{item.displayName[0]}</div><div><h3>{item.displayName}</h3><p>{item.roleTitle} · {item.email}</p><small>{item.isActive ? 'Active' : 'Archived'}</small></div><button className="button small secondary" onClick={() => void employeesApi.updateSchedule(item.id, { weeklyWindows: [1, 2, 3, 4, 5].map(day => ({ day, startTime: '09:00', endTime: '17:00' })) }).then(() => setError(''))}>Set Mon–Fri 09:00–17:00</button><button className="button small secondary" onClick={() => void employeesApi.update(item.id, { ...item, isActive: !item.isActive }).then(load)}>{item.isActive ? 'Archive' : 'Restore'}</button></article>)}{items.length === 0 && <div className="empty-state"><h3>No employees yet</h3><p>Add your team so customers can choose who they book with.</p></div>}</div><form id="new-employee" className="builder-form" onSubmit={(event) => void create(event)}><h3>Add employee</h3><input required placeholder="Full name" value={form.displayName} onChange={event => setForm({ ...form, displayName: event.target.value })} /><input required type="email" placeholder="Email" value={form.email} onChange={event => setForm({ ...form, email: event.target.value })} /><input placeholder="Role" value={form.roleTitle} onChange={event => setForm({ ...form, roleTitle: event.target.value })} /><textarea placeholder="Short bio" value={form.bio} onChange={event => setForm({ ...form, bio: event.target.value })} /><button className="button primary">Add employee</button></form></div></section>
 }
@@ -31,7 +31,7 @@ export function ServicesManagement() {
   return <section><PageHeader eyebrow="Catalog" title="Services" action={<span className="status published">{items.filter(x => x.isActive).length} active</span>} /><div className="management-grid"><div className="card-list">{items.map(item => <article className="card management-card" key={item.id}><div><h3>{item.name}</h3><p>{item.durationMinutes} min · {item.price} {item.currency}</p><small>{item.description || 'No description'}</small></div><button className="button small secondary" onClick={() => void cmsApi.updateService(item.id, { isActive: !item.isActive }).then(load)}>{item.isActive ? 'Disable' : 'Enable'}</button></article>)}</div><form className="builder-form" onSubmit={(event) => void create(event)}><h3>Add service</h3><input required placeholder="Service name" value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} /><textarea placeholder="Description" value={form.description} onChange={event => setForm({ ...form, description: event.target.value })} /><div className="form-grid"><input type="number" min="5" step="5" value={form.durationMinutes} onChange={event => setForm({ ...form, durationMinutes: Number(event.target.value) })} /><input type="number" min="0" step="0.01" value={form.price} onChange={event => setForm({ ...form, price: Number(event.target.value) })} /></div><button className="button primary">Create service</button></form></div></section>
 }
 
-export function CustomersManagement() {
+export function CustomersManagement({ websiteId: _websiteId }: { websiteId: string }) {
   const [items, setItems] = useState<CustomerProfile[]>([])
   const [search, setSearch] = useState('')
   async function load() { setItems((await customersApi.list(search)).data.items) }

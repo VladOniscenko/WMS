@@ -67,10 +67,14 @@ public sealed class EmployeeModule : IModule
             : Results.BadRequest("X-Business-Id and X-Website-Id are required.");
 
     private static async Task<IResult> ListAsync(
-        ITenantProvider tenant, IMongoRepository<EmployeeProfile> repository, CancellationToken ct) =>
-        tenant.BusinessId is Guid businessId
-            ? Results.Ok(await repository.FindAsync(employee => employee.BusinessId == businessId, ct))
-            : Results.BadRequest("X-Business-Id is required.");
+        ITenantProvider tenant, IMongoRepository<EmployeeProfile> repository, CancellationToken ct)
+    {
+        if (tenant.BusinessId is not Guid businessId)
+            return Results.BadRequest("X-Business-Id is required.");
+        var websiteId = tenant.WebsiteId;
+        return Results.Ok(await repository.FindAsync(employee => employee.BusinessId == businessId &&
+            (!websiteId.HasValue || employee.AssignedWebsiteIds.Contains(websiteId.Value)), ct));
+    }
 
     private static async Task<IResult> CreateAsync(
         EmployeeProfile employee, ITenantProvider tenant,
@@ -78,8 +82,12 @@ public sealed class EmployeeModule : IModule
     {
         if (tenant.BusinessId is not Guid businessId)
             return Results.BadRequest("X-Business-Id is required.");
+        if (tenant.WebsiteId is not Guid websiteId)
+            return Results.BadRequest("X-Website-Id is required.");
         employee.Id = Guid.NewGuid();
         employee.BusinessId = businessId;
+        if (!employee.AssignedWebsiteIds.Contains(websiteId))
+            employee.AssignedWebsiteIds.Add(websiteId);
         await repository.InsertAsync(employee, ct);
         return Results.Created($"/api/employees/{employee.Id}", employee);
     }

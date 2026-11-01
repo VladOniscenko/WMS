@@ -6,7 +6,7 @@ export type Tenant = {
   websiteId: string
   enabledModules: string[]
   themeConfig?: { primaryColor?: string; logoUrl?: string; font?: string }
-  content?: { title?: string; tagline?: string; heroText?: string; heroImageUrl?: string; aboutText?: string; galleryImageUrls?: string[] }
+  content?: { title?: string; tagline?: string; heroText?: string; heroImageUrl?: string; aboutText?: string; galleryImageUrls?: string[]; navigation?: { brandLabel?: string; items?: { label: string; pageSlug: string }[]; showBookingButton?: boolean }; footer?: { text?: string; address?: string; email?: string; phone?: string } }
 }
 const TenantContext = createContext<Tenant | null>(null)
 

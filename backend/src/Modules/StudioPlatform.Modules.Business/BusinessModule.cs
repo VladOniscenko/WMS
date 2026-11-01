@@ -41,6 +41,7 @@ public sealed class BusinessModule : IModule
         websites.MapPost("/{id:guid}/publish", PublishWebsiteAsync).RequireAuthorization();
         websites.MapPost("/{id:guid}/unpublish", UnpublishWebsiteAsync).RequireAuthorization();
         websites.MapGet("/", ListWebsitesAsync).RequireAuthorization();
+        websites.MapPost("/", CreateWebsiteForAccountAsync).RequireAuthorization();
         websites.MapPost("/{id:guid}/invitations", InviteAsync).RequireAuthorization();
         websites.MapGet("/{id:guid}/invitations", ListInvitationsAsync).RequireAuthorization();
         websites.MapPost("/invitations/{invitationId:guid}/accept", AcceptInviteAsync).RequireAuthorization();
@@ -215,6 +216,39 @@ public sealed class BusinessModule : IModule
         Results.Ok(user.IsInRole("Developer")
             ? await repository.FindAsync(_ => true, cancellationToken)
             : await GetAccessibleWebsitesAsync(repository, invitations, businesses, user, cancellationToken));
+
+    private static async Task<IResult> CreateWebsiteForAccountAsync(
+        CreateWebsiteRequest request,
+        IMongoRepository<BusinessEntity> businessRepository,
+        IMongoRepository<WebsiteEntity> websiteRepository,
+        IMongoRepository<WebsitePage> pages,
+        ClaimsPrincipal user,
+        CancellationToken cancellationToken)
+    {
+        var email = user.FindFirstValue(ClaimTypes.Email) ?? user.FindFirstValue("email");
+        if (string.IsNullOrWhiteSpace(email))
+            return Results.Unauthorized();
+
+        var owner = await businessRepository.FirstOrDefaultAsync(
+            item => item.OwnerEmail == email, cancellationToken);
+        if (owner is null)
+        {
+            owner = new BusinessEntity
+            {
+                Id = Guid.NewGuid(),
+                BusinessId = Guid.Empty,
+                Name = request.Name,
+                OwnerEmail = email,
+                SubscriptionTier = "Free",
+                IsActive = true
+            };
+            owner.BusinessId = owner.Id;
+            await businessRepository.InsertAsync(owner, cancellationToken);
+        }
+
+        return await CreateWebsiteAsync(
+            owner.Id, request, businessRepository, websiteRepository, pages, user, cancellationToken);
+    }
 
     private static async Task<IReadOnlyList<WebsiteEntity>> GetAccessibleWebsitesAsync(
         IMongoRepository<WebsiteEntity> websites,
@@ -411,6 +445,12 @@ public sealed class BusinessModule : IModule
         var page = await pages.FirstOrDefaultAsync(
             item => item.WebsiteId == website.Id && item.Slug == pageSlug && item.Status == "Published",
             cancellationToken);
+        if (page is null && string.Equals(pageSlug, "home", StringComparison.OrdinalIgnoreCase))
+        {
+            page = (await pages.FindAsync(
+                item => item.WebsiteId == website.Id && item.Status == "Published",
+                cancellationToken)).OrderBy(item => item.Slug == "home" ? 0 : 1).ThenBy(item => item.Title).FirstOrDefault();
+        }
         return page is null
             ? Results.NotFound()
             : Results.Ok(new { website.BusinessId, website.Id, website.ThemeConfig, website.Content, page });
