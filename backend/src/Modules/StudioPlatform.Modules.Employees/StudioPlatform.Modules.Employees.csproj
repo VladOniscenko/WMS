@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <PackageId>StudioPlatform.Modules.Employees</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>StudioPlatform</Authors>
+    <Description>Website-assigned employee profiles and schedules.</Description>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup><FrameworkReference Include="Microsoft.AspNetCore.App" /><ProjectReference Include="..\..\StudioPlatform.Shared\StudioPlatform.Shared.csproj" /></ItemGroup>
+
+</Project>

@@ -1,0 +1,31 @@
+# .NET build and local tooling output
+**/bin/
+**/obj/
+*.user
+*.suo
+.vs/
+
+# Frontend dependencies and generated output
+**/node_modules/
+**/dist/
+**/dist-ssr/
+*.tsbuildinfo
+
+# Local package/build artifacts
+/artifacts/
+*.nupkg
+*.snupkg
+
+# Logs, coverage, and reports
+*.log
+coverage/
+TestResults/
+
+# Local environment and IDE files
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

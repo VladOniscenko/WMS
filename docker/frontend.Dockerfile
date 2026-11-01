@@ -1,0 +1,12 @@
+FROM node:20-alpine AS build
+WORKDIR /app
+
+COPY frontend/studio-web/package*.json ./
+RUN npm ci
+
+COPY frontend/studio-web/ ./
+RUN npm run build
+
+FROM nginx:alpine
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 80
