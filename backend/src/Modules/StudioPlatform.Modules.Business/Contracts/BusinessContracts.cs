@@ -26,3 +26,24 @@ public sealed record WebsiteResolutionResponse(
     Guid WebsiteId,
     ThemeConfig ThemeConfig,
     IReadOnlyList<string> EnabledModules);
+
+public sealed record UpdateBusinessRequest(
+    string Name,
+    string OwnerEmail,
+    string SubscriptionTier,
+    bool IsActive);
+
+public sealed record UpdateWebsiteRequest(
+    string Name,
+    string DomainOrSlug,
+    List<string> EnabledModules,
+    ThemeConfig ThemeConfig);
+
+public sealed record BusinessSummaryResponse(
+    Guid Id,
+    string Name,
+    string OwnerEmail,
+    string SubscriptionTier,
+    bool IsActive,
+    int WebsiteCount,
+    IReadOnlyList<WebsiteEntity> Websites);

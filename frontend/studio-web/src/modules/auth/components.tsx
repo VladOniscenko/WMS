@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { authApi, type AuthUser } from './index'
 import { useAuth } from '@shared/auth/AuthProvider'
 
-type Props = { onAuthenticated?: (user: AuthUser) => void; onClose?: () => void }
+type Props = { onAuthenticated?: (user: AuthUser) => void; onClose?: () => void; scope?: 'customer' | 'employee' | 'developer' }
 
-export function PasswordlessLoginForm({ onAuthenticated, onClose }: Props) {
+export function PasswordlessLoginForm({ onAuthenticated, onClose, scope = 'customer' }: Props) {
   const { setSession } = useAuth()
   const [email, setEmail] = useState('')
   const [digits, setDigits] = useState(['', '', '', '', '', ''])
@@ -19,7 +19,7 @@ export function PasswordlessLoginForm({ onAuthenticated, onClose }: Props) {
   }, [sent, seconds])
   async function sendCode() {
     setError('')
-    try { await authApi.requestCode(email, 'customer'); setSent(true); setSeconds(600) }
+    try { await authApi.requestCode(email, scope); setSent(true); setSeconds(600) }
     catch { setError('We could not send a code. Check the email address and try again.') }
   }
   async function verify() {
@@ -56,6 +56,6 @@ export function PasswordlessLoginForm({ onAuthenticated, onClose }: Props) {
   </div>
 }
 
-export function PasswordlessLoginModal({ onAuthenticated, onClose }: Props) {
-  return <div className="modal" role="dialog" aria-modal="true"><PasswordlessLoginForm onAuthenticated={onAuthenticated} onClose={onClose} /></div>
+export function PasswordlessLoginModal({ onAuthenticated, onClose, scope }: Props) {
+  return <div className="modal" role="dialog" aria-modal="true"><PasswordlessLoginForm onAuthenticated={onAuthenticated} onClose={onClose} scope={scope} /></div>
 }

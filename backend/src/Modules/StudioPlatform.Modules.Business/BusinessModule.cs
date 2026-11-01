@@ -28,10 +28,42 @@ public sealed class BusinessModule : IModule
         var businesses = endpoints.MapGroup("/api/businesses").WithTags("Businesses");
         var websites = endpoints.MapGroup("/api/websites").WithTags("Websites");
 
-        businesses.MapPost("/", CreateBusinessAsync);
-        businesses.MapGet("/{id:guid}", GetBusinessAsync);
-        businesses.MapPost("/{businessId:guid}/websites", CreateWebsiteAsync);
+        businesses.MapPost("/", CreateBusinessAsync).RequireAuthorization("DeveloperOnly");
+        businesses.MapGet("/", ListBusinessesAsync).RequireAuthorization("DeveloperOnly");
+        businesses.MapGet("/{id:guid}", GetBusinessAsync).RequireAuthorization("DeveloperOnly");
+        businesses.MapPut("/{id:guid}", UpdateBusinessAsync).RequireAuthorization("DeveloperOnly");
+        businesses.MapPost("/{businessId:guid}/websites", CreateWebsiteAsync).RequireAuthorization("DeveloperOnly");
+        websites.MapPut("/{id:guid}", UpdateWebsiteAsync).RequireAuthorization("DeveloperOnly");
+        websites.MapGet("/", ListWebsitesAsync).RequireAuthorization("DeveloperOnly");
         websites.MapGet("/resolve", ResolveWebsiteAsync);
+    }
+
+    private static async Task<IResult> ListBusinessesAsync(
+        IMongoRepository<BusinessEntity> businessRepository,
+        IMongoRepository<WebsiteEntity> websiteRepository,
+        CancellationToken cancellationToken)
+    {
+        var businesses = await businessRepository.FindAsync(_ => true, cancellationToken);
+        var websites = await websiteRepository.FindAsync(_ => true, cancellationToken);
+        return Results.Ok(businesses.Select(b => new BusinessSummaryResponse(
+            b.Id, b.Name, b.OwnerEmail, b.SubscriptionTier, b.IsActive,
+            websites.Count(w => w.BusinessId == b.Id),
+            websites.Where(w => w.BusinessId == b.Id).ToList())));
+    }
+
+    private static async Task<IResult> UpdateBusinessAsync(
+        Guid id, UpdateBusinessRequest request,
+        IMongoRepository<BusinessEntity> repository,
+        CancellationToken cancellationToken)
+    {
+        var business = await repository.GetByIdAsync(id, cancellationToken);
+        if (business is null) return Results.NotFound();
+        business.Name = request.Name;
+        business.OwnerEmail = request.OwnerEmail;
+        business.SubscriptionTier = request.SubscriptionTier;
+        business.IsActive = request.IsActive;
+        await repository.ReplaceAsync(business, cancellationToken);
+        return Results.Ok(business);
     }
 
     private static async Task<IResult> CreateBusinessAsync(
@@ -102,6 +134,26 @@ public sealed class BusinessModule : IModule
 
         await websiteRepository.InsertAsync(website, cancellationToken);
         return Results.Created($"/api/websites/resolve?slug={website.DomainOrSlug}", website);
+    }
+
+    private static async Task<IResult> ListWebsitesAsync(
+        IMongoRepository<WebsiteEntity> repository,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await repository.FindAsync(_ => true, cancellationToken));
+
+    private static async Task<IResult> UpdateWebsiteAsync(
+        Guid id, UpdateWebsiteRequest request,
+        IMongoRepository<WebsiteEntity> repository,
+        CancellationToken cancellationToken)
+    {
+        var website = await repository.GetByIdAsync(id, cancellationToken);
+        if (website is null) return Results.NotFound();
+        website.Name = request.Name;
+        website.DomainOrSlug = request.DomainOrSlug;
+        website.EnabledModules = request.EnabledModules;
+        website.ThemeConfig = request.ThemeConfig;
+        await repository.ReplaceAsync(website, cancellationToken);
+        return Results.Ok(website);
     }
 
     private static async Task<IResult> ResolveWebsiteAsync(

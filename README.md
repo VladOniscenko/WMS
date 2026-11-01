@@ -17,12 +17,34 @@ Open the frontend in a browser:
 - http://localhost:3000/?site=glow-center
 - http://localhost:3000/?site=glow-south
 
+The frontend proxies API requests to the backend container, so no frontend
+configuration change is needed. MongoDB and Redis stay private to Compose,
+and the backend is private to Compose, which avoids conflicts with other local
+services using ports `27017`, `6379`, `5000`, or `5001`.
+
 The development environment seeds demo data for both websites, including nailists, services, and schedules.
+MongoDB and Redis are available to the backend over the private Compose network;
+Redis does not bind host port `6379`, so an existing local Redis installation
+will not prevent the stack from starting.
 
-Backend endpoints:
+The backend is reachable from the frontend container at `http://backend:8080`.
+Use the backend container logs for startup and runtime diagnostics:
 
-- Health: http://localhost:5000/health
-- Swagger: http://localhost:5000/swagger
+```bash
+docker compose logs -f backend
+```
+
+Developer control panel:
+
+- http://localhost:3000/admin
+- Seeded developer email: `vladislavssmine@gmail.com`
+- The OTP is printed in the backend container logs:
+
+```bash
+docker compose logs -f backend
+```
+
+Only the seeded database identity with the `Developer` role can access business and website management APIs.
 
 Stop the stack:
 

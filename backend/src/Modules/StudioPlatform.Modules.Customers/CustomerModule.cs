@@ -36,7 +36,7 @@ public sealed class CustomerModule : IModule
  static async Task<IResult> Me(ClaimsPrincipal u,IMongoRepository<CustomerProfile> r,ITenantProvider t,CancellationToken ct)=>await FindIdentity(u,r,t,ct);
  static async Task<IResult> Update(CustomerProfile input,ClaimsPrincipal u,IMongoRepository<CustomerProfile> r,ITenantProvider t,CancellationToken ct){if(!Guid.TryParse(u.FindFirst("sub")?.Value,out var id))return Results.Unauthorized();var p=await r.FirstOrDefaultAsync(x=>x.AuthIdentityId==id&&x.BusinessId==t.BusinessId,ct);if(p is null)return Results.NotFound();p.FirstName=input.FirstName;p.LastName=input.LastName;p.Phone=input.Phone;p.Notes=input.Notes;p.ConsentMarketing=input.ConsentMarketing;await r.ReplaceAsync(p,ct);return Results.Ok(p);}
  static async Task<IResult> FindIdentity(ClaimsPrincipal u,IMongoRepository<CustomerProfile> r,ITenantProvider t,CancellationToken ct){if(!Guid.TryParse(u.FindFirst("sub")?.Value,out var id))return Results.Unauthorized();var p=await r.FirstOrDefaultAsync(x=>x.AuthIdentityId==id&&x.BusinessId==t.BusinessId,ct);return p is null?Results.NotFound():Results.Ok(p);}
- static bool IsStaff(ClaimsPrincipal user)=>user.IsInRole("Employee")||user.IsInRole("BusinessAdmin");
+ static bool IsStaff(ClaimsPrincipal user)=>user.IsInRole("Employee")||user.IsInRole("BusinessAdmin")||user.IsInRole("Developer");
 }
 public sealed class UserAuthenticatedHandler(IMongoRepository<CustomerProfile> r):IIntegrationEventHandler<StudioPlatform.Shared.Contracts.UserAuthenticatedIntegrationEvent>
 {

@@ -14,13 +14,21 @@ import { useTenant } from './shared/tenancy/TenantProvider'
 
 function AdminPortal() {
   const tenant = useTenant()
+  const { user } = useAuth()
   const [tab, setTab] = useState('agenda')
-  const [website, setWebsite] = useState('all')
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [search, setSearch] = useState('')
   const [data, setData] = useState<unknown[]>([])
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
+  const [domain, setDomain] = useState('')
   const [businessId, setBusinessId] = useState(tenant?.businessId ?? '')
   const [message, setMessage] = useState('')
+  const [businesses, setBusinesses] = useState<Array<{ id: string; name: string; websiteCount: number; isActive: boolean }>>([])
+  useEffect(() => {
+    void httpClient.get<Array<{ id: string; name: string; websiteCount: number; isActive: boolean }>>('/api/businesses')
+      .then(({ data }) => setBusinesses(data))
+  }, [])
   useEffect(() => { void loadTab() }, [tab])
   async function loadTab() {
     if (tab === 'customers') setData((await customersApi.list()).data.items)
@@ -42,7 +50,7 @@ function AdminPortal() {
   }
   async function createWebsite(event: FormEvent) {
     event.preventDefault()
-    await httpClient.post(`/api/businesses/${businessId}/websites`, { name, domainOrSlug: name.toLowerCase().replaceAll(' ', '-'), enabledModules: ['cms', 'employees', 'customers', 'agenda'] })
+    await httpClient.post(`/api/businesses/${businessId}/websites`, { name, domainOrSlug: domain, enabledModules: ['cms', 'employees', 'customers', 'agenda'] })
     setMessage('Website created.'); setName('')
   }
   async function createBusiness(event: FormEvent) {
@@ -54,7 +62,8 @@ function AdminPortal() {
     setName(''); setEmail('')
   }
   const setup = tab === 'setup'
-  return <main className="portal"><header><h1>Studio backoffice</h1><label>Website<select value={website} onChange={(event) => setWebsite(event.target.value)}><option value="all">All websites</option><option value="center">Glow Nail Studio - Center</option><option value="south">Glow Nail Studio - South</option></select></label></header><nav>{['setup', 'agenda', 'employees', 'customers', 'cms'].map((item) => <button key={item} className={tab === item ? 'selected' : ''} onClick={() => setTab(item)}>{item}</button>)}</nav>{setup ? <section className="grid"><form className="card" onSubmit={(event) => void createBusiness(event)}><h2>Create business</h2><input required placeholder="Business name" value={name} onChange={(event) => setName(event.target.value)} /><input required type="email" placeholder="Owner email" value={email} onChange={(event) => setEmail(event.target.value)} /><button type="submit">Create business</button></form><form className="card" onSubmit={(event) => void createWebsite(event)}><h2>Add website</h2><input required placeholder="Website name" value={name} onChange={(event) => setName(event.target.value)} /><button type="submit" disabled={!businessId}>Create website</button></form><form className="card" onSubmit={(event) => void createEmployee(event)}><h2>Add nailist</h2><input required placeholder="Display name" value={name} onChange={(event) => setName(event.target.value)} /><input required type="email" placeholder="Email" value={email} onChange={(event) => setEmail(event.target.value)} /><button type="submit">Create nailist</button></form><form className="card" onSubmit={(event) => void createService(event)}><h2>Add service</h2><input required placeholder="Service name" value={name} onChange={(event) => setName(event.target.value)} /><button type="submit">Create service</button></form></section> : <section className="card"><h2>{tab[0].toUpperCase() + tab.slice(1)} workspace</h2><p>Live data for {website === 'all' ? 'the whole business' : 'the selected website'}.</p><ul>{data.map((item, index) => <li key={index}>{JSON.stringify(item)}</li>)}</ul></section>}{message && <p role="status">{message}</p>}</main>
+  const visibleBusinesses = businesses.filter((item) => item.name.toLowerCase().includes(search.toLowerCase()))
+  return <main className="portal"><aside className={sidebarOpen ? 'sidebar' : 'sidebar collapsed'}><button onClick={() => setSidebarOpen(!sidebarOpen)} aria-label="Toggle navigation">☰</button>{sidebarOpen && <><h2>StudioPlatform</h2>{['setup', 'agenda', 'employees', 'customers', 'cms'].map((item) => <button key={item} className={tab === item ? 'selected' : ''} onClick={() => setTab(item)}>{item}</button>)}</>}</aside><div className="dashboard"><header><input aria-label="Search businesses" placeholder="Search businesses..." value={search} onChange={(event) => setSearch(event.target.value)} /><div><h1>Developer control panel</h1><p>Signed in as {user?.email}</p></div><label>Business<select value={businessId} onChange={(event) => setBusinessId(event.target.value)}><option value="">All businesses</option>{visibleBusinesses.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></header><section className="grid"><div className="card"><strong>{businesses.length}</strong><span>Total businesses</span></div><div className="card"><strong>{businesses.reduce((count, item) => count + item.websiteCount, 0)}</strong><span>Active websites</span></div><div className="card"><strong>Healthy</strong><span>MongoDB · Redis · API</span></div></section>{setup ? <section className="grid"><form className="card" onSubmit={(event) => void createBusiness(event)}><h2>Create business</h2><input required placeholder="Business name" value={name} onChange={(event) => setName(event.target.value)} /><input required type="email" placeholder="Owner email" value={email} onChange={(event) => setEmail(event.target.value)} /><button type="submit">Create business</button></form><form className="card" onSubmit={(event) => void createWebsite(event)}><h2>Add website</h2><input required placeholder="Website name" value={name} onChange={(event) => setName(event.target.value)} /><input required placeholder="Domain or slug" value={domain} onChange={(event) => setDomain(event.target.value)} /><button type="submit" disabled={!businessId}>Create website</button></form><form className="card" onSubmit={(event) => void createEmployee(event)}><h2>Add nailist</h2><input required placeholder="Display name" value={name} onChange={(event) => setName(event.target.value)} /><input required type="email" placeholder="Email" value={email} onChange={(event) => setEmail(event.target.value)} /><button type="submit">Create nailist</button></form><form className="card" onSubmit={(event) => void createService(event)}><h2>Add service</h2><input required placeholder="Service name" value={name} onChange={(event) => setName(event.target.value)} /><button type="submit">Create service</button></form></section> : <section className="card"><h2>{tab[0].toUpperCase() + tab.slice(1)} workspace</h2><p>Live data for {businessId ? 'the selected business' : 'all businesses'}.</p><ul>{data.map((item, index) => <li key={index}>{JSON.stringify(item)}</li>)}</ul></section>}{message && <p role="status">{message}</p>}</div></main>
 }
 
 function PublicWebsite() {
@@ -63,7 +72,8 @@ function PublicWebsite() {
   const [employee, setEmployee] = useState<EmployeeProfile | null>(null)
   const [loginOpen, setLoginOpen] = useState(false)
   const tenant = useTenant()
-  if (location.pathname === '/admin') return <AdminPortal />
+  if (location.pathname === '/admin' && user?.roles.includes('Developer')) return <AdminPortal />
+  if (location.pathname === '/admin') return <PasswordlessLoginModal scope="developer" onClose={() => location.assign('/')} />
   return <main className="portal"><header><h1>Glow Nail Studio</h1><p>{tenant?.enabledModules.join(' · ')}</p><button onClick={() => isAuthenticated ? signOut() : setLoginOpen(true)}>{isAuthenticated ? `Sign out (${user?.email})` : 'Sign in'}</button></header><HeroSection /><ServiceCatalogList onSelect={setService} /><NailistsShowcase onSelect={setEmployee} />{service && <AgendaBookingWidget selectedService={service} selectedResourceId={employee?.id} currentUser={user} onRequireAuth={() => setLoginOpen(true)} />}{isAuthenticated && <CustomerProfileDrawer />}{loginOpen && <PasswordlessLoginModal onClose={() => setLoginOpen(false)} />}</main>
 }
 

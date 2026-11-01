@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-export const httpClient = axios.create({ baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:5000' })
+export const httpClient = axios.create({ baseURL: import.meta.env.VITE_API_URL ?? '' })
 
 httpClient.interceptors.request.use((config) => {
   const tenant = JSON.parse(localStorage.getItem('studio-tenant') ?? '{}') as { businessId?: string; websiteId?: string }

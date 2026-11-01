@@ -141,12 +141,20 @@ public sealed class AuthModule : IModule
     private static async Task<IResult> RequestCodeAsync(
         RequestCodeRequest request, ITenantProvider tenant, IOtpService otp,
         IRedisCacheService cache,
-        IEmailSender emailSender, CancellationToken cancellationToken)
+        IEmailSender emailSender, IMongoRepository<AuthIdentity> identities,
+        CancellationToken cancellationToken)
     {
-        if (tenant.BusinessId is not Guid businessId ||
-            !Regex.IsMatch(request.Email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$") ||
-            request.Scope is not ("customer" or "employee"))
+        var businessId = tenant.BusinessId ?? Guid.Empty;
+        if (!Regex.IsMatch(request.Email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$") ||
+            request.Scope is not ("customer" or "employee" or "developer"))
             return Results.BadRequest("Valid business, email, and scope are required.");
+        if (request.Scope == "developer" &&
+            await identities.FirstOrDefaultAsync(
+                identity => identity.BusinessId == Guid.Empty &&
+                    identity.Email == request.Email.ToLowerInvariant() &&
+                    identity.Roles.Contains("Developer"),
+                cancellationToken) is null)
+            return Results.Forbid();
         try
         {
             var code = await otp.RequestAsync(businessId, request.Email, cancellationToken);
@@ -168,8 +176,8 @@ public sealed class AuthModule : IModule
         IRedisCacheService cache,
         IConfiguration configuration, CancellationToken cancellationToken)
     {
-        if (tenant.BusinessId is not Guid businessId ||
-            !await otp.VerifyAsync(businessId, request.Email, request.Code, cancellationToken))
+        var businessId = tenant.BusinessId ?? Guid.Empty;
+        if (!await otp.VerifyAsync(businessId, request.Email, request.Code, cancellationToken))
             return Results.BadRequest("Invalid or expired code.");
 
         var email = request.Email.ToLowerInvariant();
@@ -182,10 +190,18 @@ public sealed class AuthModule : IModule
             identity = new AuthIdentity
             {
                 Id = Guid.NewGuid(), BusinessId = businessId, Email = email,
-                Roles = [scope == "employee" ? "Employee" : "Customer"]
+                Roles = [scope switch
+                {
+                    "developer" => "Developer",
+                    "employee" => "Employee",
+                    _ => "Customer"
+                }]
             };
             await identities.InsertAsync(identity, cancellationToken);
         }
+        if (scope == "developer" &&
+            (identity is null || !identity.Roles.Contains("Developer")))
+            return Results.Forbid();
         await cache.RemoveAsync($"auth:otp:scope:{businessId}:{email}");
         identity.LastLoginAtUtc = DateTime.UtcNow;
         await identities.ReplaceAsync(identity, cancellationToken);

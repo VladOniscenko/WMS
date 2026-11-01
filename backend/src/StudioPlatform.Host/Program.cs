@@ -31,7 +31,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
         ValidateIssuer = false, ValidateAudience = false, ValidateLifetime = true
     };
 });
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("DeveloperOnly", policy =>
+        policy.RequireAssertion(context =>
+            context.User.IsInRole("Developer")));
+});
 if (builder.Environment.IsDevelopment())
     builder.Services.AddHostedService<DemoDataSeeder>();
 

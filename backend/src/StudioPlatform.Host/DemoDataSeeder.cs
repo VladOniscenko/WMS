@@ -1,5 +1,6 @@
 using StudioPlatform.Modules.Business.Domain;
 using StudioPlatform.Modules.Core.Domain;
+using StudioPlatform.Modules.Auth;
 using StudioPlatform.Modules.Employees;
 using StudioPlatform.Shared.Contracts;
 using StudioPlatform.Shared.Messaging;
@@ -12,6 +13,7 @@ public sealed class DemoDataSeeder(
     private static readonly Guid BusinessId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid CenterId = Guid.Parse("22222222-2222-2222-2222-222222222222");
     private static readonly Guid SouthId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+    private const string DeveloperEmail = "vladislavssmine@gmail.com";
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -20,7 +22,20 @@ public sealed class DemoDataSeeder(
         var websites = scope.ServiceProvider.GetRequiredService<IMongoRepository<WebsiteEntity>>();
         var employees = scope.ServiceProvider.GetRequiredService<IMongoRepository<EmployeeProfile>>();
         var services = scope.ServiceProvider.GetRequiredService<IMongoRepository<CatalogServiceItem>>();
+        var identities = scope.ServiceProvider.GetRequiredService<IMongoRepository<AuthIdentity>>();
         var eventBus = scope.ServiceProvider.GetRequiredService<IEventBus>();
+        var developer = await identities.FirstOrDefaultAsync(
+            identity => identity.BusinessId == Guid.Empty && identity.Email == DeveloperEmail,
+            cancellationToken);
+        if (developer is null)
+            await identities.InsertAsync(new AuthIdentity
+            {
+                Id = Guid.NewGuid(),
+                BusinessId = Guid.Empty,
+                Email = DeveloperEmail,
+                Roles = ["Developer"]
+            }, cancellationToken);
+
         if (await businesses.GetByIdAsync(BusinessId, cancellationToken) is not null) return;
         await businesses.InsertAsync(new BusinessEntity { Id = BusinessId, BusinessId = BusinessId, Name = "Glow Beauty Group", OwnerEmail = "owner@glow-nails.test", SubscriptionTier = "Professional" }, cancellationToken);
         foreach (var website in new[]

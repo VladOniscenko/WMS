@@ -19,7 +19,7 @@ export function TenantProvider({ children }: PropsWithChildren) {
   }, [])
   if (error && location.pathname !== '/admin') return <p role="alert">{error}</p>
   if (error && location.pathname === '/admin') return <TenantContext.Provider value={null}>{children}</TenantContext.Provider>
-  if (!tenant) return <p>Loading website…</p>
+  if (!tenant && location.pathname !== '/admin') return <p>Loading website…</p>
   return <TenantContext.Provider value={tenant}>{children}</TenantContext.Provider>
 }
 export const useTenant = () => useContext(TenantContext)
