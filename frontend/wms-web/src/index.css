@@ -67,6 +67,7 @@ button { cursor: pointer; }
 .website-preview span { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; }
 .website-preview strong { font-family: Georgia, serif; font-size: 26px; }
 .website-card-body { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 17px; }
+.website-card-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 17px 17px; }
 .website-card-body h3, .template-card h3 { margin: 0 0 4px; font-size: 16px; }
 .website-card-body p, .template-card p, .muted { margin: 0; color: var(--muted); font-size: 13px; }
 .status { font-weight: 600; }
