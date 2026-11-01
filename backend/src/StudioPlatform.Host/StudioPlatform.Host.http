@@ -1,6 +1,0 @@
-@StudioPlatform.Host_HostAddress = http://localhost:5125
-
-GET {{StudioPlatform.Host_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###
