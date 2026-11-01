@@ -30,7 +30,8 @@ public sealed record WebsiteResolutionResponse(
     Guid WebsiteId,
     ThemeConfig ThemeConfig,
     IReadOnlyList<string> EnabledModules,
-    WebsiteContent Content);
+    WebsiteContent Content,
+    string Status = "Published");
 
 public sealed record UpdateBusinessRequest(
     string Name,

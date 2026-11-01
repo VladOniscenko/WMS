@@ -11,6 +11,7 @@ using StudioPlatform.Modules.Business.Domain;
 using StudioPlatform.Shared.Infrastructure;
 using StudioPlatform.Shared.Modules;
 using StudioPlatform.Shared.Persistence;
+using StudioPlatform.Shared.Storage;
 
 namespace StudioPlatform.Modules.Business;
 
@@ -440,32 +441,37 @@ public sealed class BusinessModule : IModule
         IMongoRepository<WebsitePage> pages, CancellationToken cancellationToken)
     {
         var website = await websites.FirstOrDefaultAsync(
-            item => item.DomainOrSlug == slug && item.Status == "Published", cancellationToken);
+            item => item.DomainOrSlug == slug, cancellationToken);
         if (website is null) return Results.NotFound();
+        if (website.Status == "Draft")
+        {
+            return Results.Ok(new { website.BusinessId, website.Id, website.ThemeConfig, website.Content, isDraft = true, websiteStatus = "Draft", page = (object?)null });
+        }
         var page = await pages.FirstOrDefaultAsync(
-            item => item.WebsiteId == website.Id && item.Slug == pageSlug && item.Status == "Published",
+            item => item.WebsiteId == website.Id && item.Slug == pageSlug,
             cancellationToken);
         if (page is null && string.Equals(pageSlug, "home", StringComparison.OrdinalIgnoreCase))
         {
             page = (await pages.FindAsync(
-                item => item.WebsiteId == website.Id && item.Status == "Published",
+                item => item.WebsiteId == website.Id,
                 cancellationToken)).OrderBy(item => item.Slug == "home" ? 0 : 1).ThenBy(item => item.Title).FirstOrDefault();
         }
-        return page is null
-            ? Results.NotFound()
-            : Results.Ok(new { website.BusinessId, website.Id, website.ThemeConfig, website.Content, page });
+        if (page is null) return Results.NotFound();
+        if (page.Status == "Draft")
+        {
+            return Results.Ok(new { website.BusinessId, website.Id, website.ThemeConfig, website.Content, isDraft = true, websiteStatus = website.Status, pageStatus = "Draft", page });
+        }
+        return Results.Ok(new { website.BusinessId, website.Id, website.ThemeConfig, website.Content, isDraft = false, websiteStatus = website.Status, page });
     }
 
     private static async Task<IResult> UploadAssetAsync(
-        IFormFile file, IWebHostEnvironment environment, CancellationToken cancellationToken)
+        IFormFile file, IAssetStorage assetStorage, CancellationToken cancellationToken)
     {
         if (file.Length == 0 || file.Length > 10 * 1024 * 1024)
             return Results.BadRequest("Images must be between 1 byte and 10 MB.");
         var allowed = new[] { "image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml" };
         if (!allowed.Contains(file.ContentType, StringComparer.OrdinalIgnoreCase))
             return Results.BadRequest("Only JPEG, PNG, WebP, GIF, and SVG images are supported.");
-        var root = Path.Combine(environment.ContentRootPath, "uploads");
-        Directory.CreateDirectory(root);
         var extension = file.ContentType.ToLowerInvariant() switch
         {
             "image/jpeg" => ".jpg",
@@ -476,9 +482,9 @@ public sealed class BusinessModule : IModule
             _ => ".bin"
         };
         var name = $"{Guid.NewGuid():N}{extension}";
-        await using var stream = File.Create(Path.Combine(root, name));
-        await file.CopyToAsync(stream, cancellationToken);
-        return Results.Ok(new { url = $"/uploads/{name}" });
+        await using var stream = file.OpenReadStream();
+        var url = await assetStorage.UploadAsync(stream, name, file.ContentType, cancellationToken);
+        return Results.Ok(new { url });
     }
 
     private static async Task<bool> CanManageWebsiteAsync(
@@ -501,7 +507,7 @@ public sealed class BusinessModule : IModule
         CancellationToken cancellationToken)
     {
         var website = await websiteRepository.FirstOrDefaultAsync(
-            website => website.DomainOrSlug == slug && website.Status == "Published",
+            website => website.DomainOrSlug == slug,
             cancellationToken);
         return website is null
             ? Results.NotFound()
@@ -510,7 +516,8 @@ public sealed class BusinessModule : IModule
                 website.Id,
                 website.ThemeConfig,
                 website.EnabledModules,
-                website.Content));
+                website.Content,
+                website.Status));
     }
 
     private static bool IsOwner(ClaimsPrincipal user, BusinessEntity business) =>

@@ -1,6 +1,19 @@
 import { httpClient } from '@shared/api/httpClient'
 export { CustomerProfileDrawer } from './components'
-export type CustomerProfile = { id: string; email: string; firstName?: string; lastName?: string; phone?: string; notes?: string; consentMarketing: boolean; visitedWebsiteIds: string[] }
+export type CustomerProfile = {
+  id: string
+  email: string
+  firstName?: string
+  lastName?: string
+  phone?: string
+  notes?: string
+  consentMarketing: boolean
+  visitedWebsiteIds: string[]
+  addressLine?: string
+  city?: string
+  postalCode?: string
+  country?: string
+}
 export const customersApi = {
   me: () => httpClient.get<CustomerProfile>('/api/customers/me'),
   updateMe: (profile: Partial<CustomerProfile>) => httpClient.put<CustomerProfile>('/api/customers/me', profile),

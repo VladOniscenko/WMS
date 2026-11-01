@@ -1,5 +1,4 @@
-using System.Net;
-using System.Net.Mail;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -9,12 +8,12 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
 using StudioPlatform.Shared.Caching;
 using StudioPlatform.Shared.Contracts;
+using StudioPlatform.Shared.Email;
 using StudioPlatform.Shared.Infrastructure;
 using StudioPlatform.Shared.Messaging;
 using StudioPlatform.Shared.Modules;
@@ -28,42 +27,6 @@ public sealed class AuthIdentity : BaseEntity
     public string Email { get; set; } = string.Empty;
     public List<string> Roles { get; set; } = ["Customer"];
     public DateTime? LastLoginAtUtc { get; set; }
-}
-
-public interface IEmailSender
-{
-    Task SendOtpAsync(string email, string code, CancellationToken cancellationToken);
-}
-
-public sealed class ConsoleDevelopmentEmailSender(
-    ILogger<ConsoleDevelopmentEmailSender> logger,
-    IRedisCacheService cache) : IEmailSender
-{
-    public async Task SendOtpAsync(string email, string code, CancellationToken cancellationToken)
-    {
-        logger.LogInformation("Passwordless OTP for {Email}: {Code}", email, code);
-        await cache.SetAsync($"auth:otp:dev:{email.ToLowerInvariant()}", code, TimeSpan.FromMinutes(10));
-    }
-}
-
-public sealed class SmtpEmailSender(IConfiguration configuration) : IEmailSender
-{
-    public async Task SendOtpAsync(string email, string code, CancellationToken cancellationToken)
-    {
-        using var client = new SmtpClient(configuration["Smtp:Host"])
-        {
-            Port = configuration.GetValue("Smtp:Port", 587),
-            EnableSsl = true,
-            Credentials = new NetworkCredential(
-                configuration["Smtp:Username"], configuration["Smtp:Password"])
-        };
-        using var message = new MailMessage(
-            configuration["Smtp:From"] ?? throw new InvalidOperationException("Smtp:From is required."),
-            email,
-            "Your StudioPlatform login code",
-            $"Your one-time login code is {code}. It expires in 10 minutes.");
-        await client.SendMailAsync(message, cancellationToken);
-    }
 }
 
 public interface IOtpService
@@ -113,8 +76,10 @@ public sealed class RedisOtpService(IRedisCacheService cache) : IOtpService
     }
 }
 
-public sealed record RequestCodeRequest(string Email, string Scope);
+public sealed record RequestCodeRequest(string Email, string? Scope = "customer");
 public sealed record VerifyCodeRequest(string Email, string Code);
+public sealed record RefreshTokenRequest(string? RefreshToken);
+public sealed record RefreshTokenSession(Guid UserId, Guid BusinessId, string Email, string Role);
 
 public sealed class AuthModule : IModule
 {
@@ -123,17 +88,15 @@ public sealed class AuthModule : IModule
         services.AddMongoRepository<AuthIdentity>("studio_auth");
         services.AddMongoRepository<UserProfile>("studio_auth");
         services.AddSingleton<IOtpService, RedisOtpService>();
-        services.AddSingleton<IEmailSender>(provider =>
-            string.Equals(configuration["Email:Provider"], "smtp", StringComparison.OrdinalIgnoreCase)
-                ? new SmtpEmailSender(configuration)
-                : provider.GetRequiredService<ConsoleDevelopmentEmailSender>());
-        services.AddSingleton<ConsoleDevelopmentEmailSender>();
     }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints)
     {
         endpoints.MapPost("/api/auth/request-code", RequestCodeAsync);
+        endpoints.MapPost("/api/auth/otp/request", RequestCodeAsync);
         endpoints.MapPost("/api/auth/verify-code", VerifyCodeAsync);
+        endpoints.MapPost("/api/auth/otp/verify", VerifyCodeAsync);
+        endpoints.MapPost("/api/auth/refresh", RefreshAsync);
         endpoints.MapGet("/api/auth/me", (ClaimsPrincipal user) =>
                 Results.Ok(user.Claims.GroupBy(claim => claim.Type)
                     .ToDictionary(group => group.Key, group => group.Select(claim => claim.Value).ToArray())))
@@ -189,10 +152,11 @@ public sealed class AuthModule : IModule
         CancellationToken cancellationToken)
     {
         var businessId = tenant.BusinessId ?? Guid.Empty;
+        var scope = string.IsNullOrWhiteSpace(request.Scope) ? "customer" : request.Scope;
         if (!Regex.IsMatch(request.Email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$") ||
-            request.Scope is not ("customer" or "employee" or "business-admin" or "developer"))
+            scope is not ("customer" or "employee" or "business-admin" or "developer"))
             return Results.BadRequest("Valid business, email, and scope are required.");
-        if (request.Scope == "developer" &&
+        if (scope == "developer" &&
             await identities.FirstOrDefaultAsync(
                 identity => identity.BusinessId == Guid.Empty &&
                     identity.Email == request.Email.ToLowerInvariant() &&
@@ -204,7 +168,7 @@ public sealed class AuthModule : IModule
             var code = await otp.RequestAsync(businessId, request.Email, cancellationToken);
             await cache.SetAsync(
                 $"auth:otp:scope:{businessId}:{request.Email.ToLowerInvariant()}",
-                request.Scope, TimeSpan.FromMinutes(10));
+                scope, TimeSpan.FromMinutes(10));
             await emailSender.SendOtpAsync(request.Email, code, cancellationToken);
             return environment.IsDevelopment()
                 ? Results.Ok(new { message = "Code sent.", developmentCode = code })
@@ -217,7 +181,7 @@ public sealed class AuthModule : IModule
     }
 
     private static async Task<IResult> VerifyCodeAsync(
-        VerifyCodeRequest request, ITenantProvider tenant, IOtpService otp,
+        VerifyCodeRequest request, HttpContext httpContext, ITenantProvider tenant, IOtpService otp,
         IMongoRepository<AuthIdentity> identities, IEventBus eventBus,
         IRedisCacheService cache,
         IConfiguration configuration, CancellationToken cancellationToken)
@@ -235,7 +199,9 @@ public sealed class AuthModule : IModule
         {
             identity = new AuthIdentity
             {
-                Id = Guid.NewGuid(), BusinessId = businessId, Email = email,
+                Id = Guid.NewGuid(),
+                BusinessId = businessId,
+                Email = email,
                 Roles = [scope switch
                 {
                     "developer" => "Developer",
@@ -258,7 +224,7 @@ public sealed class AuthModule : IModule
             cancellationToken);
 
         var secret = configuration["Jwt:Secret"]
-            ?? throw new InvalidOperationException("Jwt:Secret is not configured.");
+            ?? throw new InvalidOperationException("Jwt:Secret must be configured.");
         var claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Sub, identity.Id.ToString()),
@@ -266,7 +232,7 @@ public sealed class AuthModule : IModule
             new Claim("business_id", businessId.ToString()),
             new Claim(ClaimTypes.Role, role)
         };
-        var token = new System.IdentityModel.Tokens.Jwt.JwtSecurityToken(
+        var token = new JwtSecurityToken(
             issuer: configuration["Jwt:Issuer"],
             audience: configuration["Jwt:Audience"],
             claims: claims,
@@ -274,10 +240,96 @@ public sealed class AuthModule : IModule
             signingCredentials: new SigningCredentials(
                 new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret)),
                 SecurityAlgorithms.HmacSha256));
+
+        // Generate and persist refresh token (WMS-004)
+        var refreshToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        var refreshSession = new RefreshTokenSession(identity.Id, businessId, email, role);
+        await cache.SetAsync($"auth:refresh:{refreshToken}", refreshSession, TimeSpan.FromDays(7));
+
+        httpContext.Response.Cookies.Append("refreshToken", refreshToken, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Lax,
+            Expires = DateTimeOffset.UtcNow.AddDays(7)
+        });
+
         return Results.Ok(new
         {
-            accessToken = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().WriteToken(token),
+            accessToken = new JwtSecurityTokenHandler().WriteToken(token),
+            refreshToken,
             expiresAt = token.ValidTo,
+            user = identity
+        });
+    }
+
+    private static async Task<IResult> RefreshAsync(
+        RefreshTokenRequest? request,
+        HttpContext httpContext,
+        IRedisCacheService cache,
+        IMongoRepository<AuthIdentity> identities,
+        IConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
+        var token = request?.RefreshToken ?? httpContext.Request.Cookies["refreshToken"];
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return Results.Unauthorized();
+        }
+
+        var key = $"auth:refresh:{token}";
+        var session = await cache.GetAsync<RefreshTokenSession>(key);
+        if (session is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        // Rotate refresh token
+        await cache.RemoveAsync(key);
+
+        var identity = await identities.GetByIdAsync(session.UserId, cancellationToken)
+            ?? await identities.FirstOrDefaultAsync(x => x.Email == session.Email, cancellationToken);
+        if (identity is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var role = identity.Roles.FirstOrDefault() ?? session.Role;
+        var newRefreshToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        var newSession = new RefreshTokenSession(identity.Id, session.BusinessId, identity.Email, role);
+        await cache.SetAsync($"auth:refresh:{newRefreshToken}", newSession, TimeSpan.FromDays(7));
+
+        httpContext.Response.Cookies.Append("refreshToken", newRefreshToken, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Lax,
+            Expires = DateTimeOffset.UtcNow.AddDays(7)
+        });
+
+        var secret = configuration["Jwt:Secret"]
+            ?? throw new InvalidOperationException("Jwt:Secret must be configured.");
+        var claims = new[]
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, identity.Id.ToString()),
+            new Claim(JwtRegisteredClaimNames.Email, identity.Email),
+            new Claim("business_id", session.BusinessId.ToString()),
+            new Claim(ClaimTypes.Role, role)
+        };
+        var jwt = new JwtSecurityToken(
+            issuer: configuration["Jwt:Issuer"],
+            audience: configuration["Jwt:Audience"],
+            claims: claims,
+            expires: DateTime.UtcNow.AddHours(8),
+            signingCredentials: new SigningCredentials(
+                new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret)),
+                SecurityAlgorithms.HmacSha256));
+
+        return Results.Ok(new
+        {
+            accessToken = new JwtSecurityTokenHandler().WriteToken(jwt),
+            refreshToken = newRefreshToken,
+            expiresAt = jwt.ValidTo,
             user = identity
         });
     }

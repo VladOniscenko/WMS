@@ -14,6 +14,9 @@ COPY backend/tests/StudioPlatform.Shared.Tests/StudioPlatform.Shared.Tests.cspro
 RUN dotnet restore backend/StudioPlatform.sln
 
 COPY backend/src backend/src
+COPY backend/tests backend/tests
+RUN dotnet test backend/tests/StudioPlatform.Shared.Tests/StudioPlatform.Shared.Tests.csproj --no-restore
+
 RUN dotnet publish backend/src/StudioPlatform.Host/StudioPlatform.Host.csproj \
     --configuration Release \
     --no-restore \

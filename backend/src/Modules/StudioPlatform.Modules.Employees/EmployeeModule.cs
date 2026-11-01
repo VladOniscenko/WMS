@@ -15,6 +15,7 @@ namespace StudioPlatform.Modules.Employees;
 public sealed class EmployeeProfile : BaseEntity
 {
     public List<Guid> AssignedWebsiteIds { get; set; } = [];
+    public List<Guid> ServiceIds { get; set; } = [];
     public string Email { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
     public string? RoleTitle { get; set; }
@@ -34,11 +35,22 @@ public sealed class ScheduleWindow
     public TimeOnly? BreakEnd { get; set; }
 }
 
+public sealed class EmployeeDateOverride
+{
+    public DateOnly Date { get; set; }
+    public bool IsUnavailable { get; set; }
+    public TimeOnly? StartTime { get; set; }
+    public TimeOnly? EndTime { get; set; }
+    public TimeOnly? BreakStart { get; set; }
+    public TimeOnly? BreakEnd { get; set; }
+}
+
 public sealed class EmployeeWeeklySchedule : BaseEntity
 {
     public Guid EmployeeId { get; set; }
     public Guid? WebsiteId { get; set; }
     public List<ScheduleWindow> Windows { get; set; } = [];
+    public List<EmployeeDateOverride> DateOverrides { get; set; } = [];
 }
 
 public sealed class EmployeeModule : IModule
@@ -54,16 +66,19 @@ public sealed class EmployeeModule : IModule
         endpoints.MapGet("/api/employees/public", PublicAsync);
         endpoints.MapGet("/api/employees", ListAsync).RequireAuthorization();
         endpoints.MapPost("/api/employees", CreateAsync).RequireAuthorization();
+        endpoints.MapGet("/api/employees/schedules", ListSchedulesAsync).RequireAuthorization();
+        endpoints.MapGet("/api/employees/{id:guid}/schedule", GetScheduleAsync).RequireAuthorization();
         endpoints.MapPut("/api/employees/{id:guid}", UpdateAsync).RequireAuthorization();
         endpoints.MapPut("/api/employees/{id:guid}/schedule", ScheduleAsync).RequireAuthorization();
     }
 
     private static async Task<IResult> PublicAsync(
-        ITenantProvider tenant, IMongoRepository<EmployeeProfile> repository, CancellationToken ct) =>
+        Guid? serviceId, ITenantProvider tenant, IMongoRepository<EmployeeProfile> repository, CancellationToken ct) =>
         tenant.BusinessId is Guid businessId && tenant.WebsiteId is Guid websiteId
             ? Results.Ok(await repository.FindAsync(
                 employee => employee.BusinessId == businessId &&
-                    employee.AssignedWebsiteIds.Contains(websiteId) && employee.IsActive, ct))
+                    employee.AssignedWebsiteIds.Contains(websiteId) && employee.IsActive &&
+                    (!serviceId.HasValue || employee.ServiceIds.Contains(serviceId.Value)), ct))
             : Results.BadRequest("X-Business-Id and X-Website-Id are required.");
 
     private static async Task<IResult> ListAsync(
@@ -105,6 +120,28 @@ public sealed class EmployeeModule : IModule
         return Results.Ok(input);
     }
 
+    private static async Task<IResult> GetScheduleAsync(
+        Guid id, ITenantProvider tenant, IMongoRepository<EmployeeWeeklySchedule> repository, CancellationToken ct)
+    {
+        if (tenant.BusinessId is not Guid businessId)
+            return Results.BadRequest("X-Business-Id is required.");
+        var schedule = await repository.FirstOrDefaultAsync(
+            item => item.EmployeeId == id && item.BusinessId == businessId &&
+                (!tenant.WebsiteId.HasValue || item.WebsiteId == tenant.WebsiteId), ct);
+        return schedule is null ? Results.NotFound() : Results.Ok(schedule);
+    }
+
+    private static async Task<IResult> ListSchedulesAsync(
+        ITenantProvider tenant, IMongoRepository<EmployeeWeeklySchedule> repository, CancellationToken ct)
+    {
+        if (tenant.BusinessId is not Guid businessId)
+            return Results.BadRequest("X-Business-Id is required.");
+        var schedules = await repository.FindAsync(
+            item => item.BusinessId == businessId &&
+                (!tenant.WebsiteId.HasValue || item.WebsiteId == tenant.WebsiteId), ct);
+        return Results.Ok(schedules);
+    }
+
     private static async Task<IResult> ScheduleAsync(
         Guid id, EmployeeWeeklySchedule schedule, ITenantProvider tenant,
         IMongoRepository<EmployeeWeeklySchedule> repository,
@@ -124,7 +161,7 @@ public sealed class EmployeeModule : IModule
         await eventBus.PublishAsync(new EmployeeScheduleUpdatedIntegrationEvent(
             businessId, schedule.WebsiteId, id,
             schedule.Windows.Select(window => new WorkingWindowDto(
-                window.Day, window.StartTime, window.EndTime)).ToList()), ct);
+                window.Day, window.StartTime, window.EndTime, window.BreakStart, window.BreakEnd)).ToList()), ct);
         return Results.Ok(schedule);
     }
 }

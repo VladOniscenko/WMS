@@ -6,6 +6,16 @@ Prerequisites:
 
 - Docker Desktop with Docker Compose
 
+Environment Setup:
+
+Copy `.env.example` to `.env` to configure your environment:
+
+```bash
+cp .env.example .env
+```
+
+`JWT_SECRET` must be set to a cryptographically secure key (at least 32 characters long). In Docker Compose, `Jwt__Secret` defaults to `${JWT_SECRET:-development-only-secret-change-me-please-32chars}` for local development, but in production a unique key must be supplied via `.env` or container environment variables. Missing `Jwt:Secret` will cause the backend to terminate on startup.
+
 Start the full stack from the repository root:
 
 ```bash

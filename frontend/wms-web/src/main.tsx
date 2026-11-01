@@ -1,12 +1,26 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.tsx'
-import { TenantProvider } from './shared/tenancy/TenantProvider'
-import { AuthProvider } from './shared/auth/AuthProvider'
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
+import { QueryClientProvider } from "@tanstack/react-query";
+import "./index.css";
+import App from "./App.tsx";
+import { queryClient } from "./shared/queries/queryClient";
+import { AuthProvider } from "./shared/auth/AuthProvider";
+import { ToastProvider } from "./shared/ui/Toast";
+import { ErrorBoundary } from "./shared/ui/ErrorBoundary";
 
-createRoot(document.getElementById('root')!).render(
+createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <TenantProvider><AuthProvider><App /></AuthProvider></TenantProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <AuthProvider>
+            <ToastProvider>
+              <App />
+            </ToastProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </ErrorBoundary>
   </StrictMode>,
-)
+);

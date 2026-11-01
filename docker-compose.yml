@@ -25,7 +25,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       MongoDB__ConnectionString: mongodb://mongodb:27017
       Redis__ConnectionString: redis:6379
-      Jwt__Secret: development-only-secret-change-me-please-32chars
+      Jwt__Secret: ${JWT_SECRET:-development-only-secret-change-me-please-32chars}
       Jwt__Issuer: StudioPlatform
       Jwt__Audience: StudioPlatform.Web
     depends_on:
