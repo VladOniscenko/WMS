@@ -1,10 +1,10 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 
-COPY frontend/studio-web/package*.json ./
+COPY frontend/wms-web/package*.json ./
 RUN npm ci
 
-COPY frontend/studio-web/ ./
+COPY frontend/wms-web/ ./
 RUN npm run build
 
 FROM nginx:alpine

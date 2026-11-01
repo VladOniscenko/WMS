@@ -36,12 +36,24 @@ public sealed class DemoDataSeeder(
                 Roles = ["Developer"]
             }, cancellationToken);
 
-        if (await businesses.GetByIdAsync(BusinessId, cancellationToken) is not null) return;
+        if (await businesses.GetByIdAsync(BusinessId, cancellationToken) is not null)
+        {
+            foreach (var existingWebsite in await websites.GetByBusinessIdAsync(BusinessId, cancellationToken))
+            {
+                if (existingWebsite.Status != "Published")
+                {
+                    existingWebsite.Status = "Published";
+                    existingWebsite.PublishedAtUtc = DateTime.UtcNow;
+                    await websites.ReplaceAsync(existingWebsite, cancellationToken);
+                }
+            }
+            return;
+        }
         await businesses.InsertAsync(new BusinessEntity { Id = BusinessId, BusinessId = BusinessId, Name = "Glow Beauty Group", OwnerEmail = "owner@glow-nails.test", SubscriptionTier = "Professional" }, cancellationToken);
         foreach (var website in new[]
         {
-            new WebsiteEntity { Id = CenterId, BusinessId = BusinessId, Name = "Glow Nail Studio - Center", DomainOrSlug = "glow-center", EnabledModules = ["cms", "employees", "customers", "agenda"] },
-            new WebsiteEntity { Id = SouthId, BusinessId = BusinessId, Name = "Glow Nail Studio - South", DomainOrSlug = "glow-south", EnabledModules = ["cms", "employees", "customers", "agenda"] },
+            new WebsiteEntity { Id = CenterId, BusinessId = BusinessId, Name = "Glow Nail Studio - Center", DomainOrSlug = "glow-center", Status = "Published", EnabledModules = ["cms", "employees", "customers", "agenda"] },
+            new WebsiteEntity { Id = SouthId, BusinessId = BusinessId, Name = "Glow Nail Studio - South", DomainOrSlug = "glow-south", Status = "Published", EnabledModules = ["cms", "employees", "customers", "agenda"] },
         }) await websites.InsertAsync(website, cancellationToken);
 
         var names = new[] { ("Mia Laurent", "mia@glow-nails.test"), ("Sofia Chen", "sofia@glow-nails.test"), ("Amara Jones", "amara@glow-nails.test") };

@@ -10,8 +10,12 @@ public sealed record CreateBusinessRequest(
 public sealed record CreateWebsiteRequest(
     string Name,
     string DomainOrSlug,
+    string? TemplateId = null,
+    string? Category = null,
     List<string>? EnabledModules = null,
-    ThemeConfig? ThemeConfig = null);
+    ThemeConfig? ThemeConfig = null,
+    WebsiteContent? Content = null,
+    List<string>? ServiceIds = null);
 
 public sealed record BusinessDetailsResponse(
     Guid Id,
@@ -25,7 +29,8 @@ public sealed record WebsiteResolutionResponse(
     Guid BusinessId,
     Guid WebsiteId,
     ThemeConfig ThemeConfig,
-    IReadOnlyList<string> EnabledModules);
+    IReadOnlyList<string> EnabledModules,
+    WebsiteContent Content);
 
 public sealed record UpdateBusinessRequest(
     string Name,
@@ -37,7 +42,10 @@ public sealed record UpdateWebsiteRequest(
     string Name,
     string DomainOrSlug,
     List<string> EnabledModules,
-    ThemeConfig ThemeConfig);
+    ThemeConfig ThemeConfig,
+    WebsiteContent? Content = null,
+    List<string>? ServiceIds = null,
+    string? Category = null);
 
 public sealed record BusinessSummaryResponse(
     Guid Id,

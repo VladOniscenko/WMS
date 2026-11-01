@@ -11,4 +11,16 @@ public sealed class WebsiteEntity : BaseEntity
     public List<string> EnabledModules { get; set; } = [];
 
     public ThemeConfig ThemeConfig { get; set; } = new();
+
+    public WebsiteContent Content { get; set; } = new();
+
+    public List<string> ServiceIds { get; set; } = [];
+
+    public string Category { get; set; } = "Other";
+
+    public string TemplateId { get; set; } = "editorial";
+
+    public string Status { get; set; } = "Draft";
+
+    public DateTime? PublishedAtUtc { get; set; }
 }

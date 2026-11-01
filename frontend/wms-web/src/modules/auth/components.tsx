@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { authApi, type AuthUser } from './index'
 import { useAuth } from '@shared/auth/AuthProvider'
 
-type Props = { onAuthenticated?: (user: AuthUser) => void; onClose?: () => void; scope?: 'customer' | 'employee' | 'developer' }
+type Props = { onAuthenticated?: (user: AuthUser) => void; onClose?: () => void; scope?: 'customer' | 'employee' | 'business-admin' | 'developer' }
 
 export function PasswordlessLoginForm({ onAuthenticated, onClose, scope = 'customer' }: Props) {
   const { setSession } = useAuth()
@@ -11,6 +11,7 @@ export function PasswordlessLoginForm({ onAuthenticated, onClose, scope = 'custo
   const [sent, setSent] = useState(false)
   const [seconds, setSeconds] = useState(600)
   const [error, setError] = useState('')
+  const [developmentCode, setDevelopmentCode] = useState('')
   const refs = useRef<Array<HTMLInputElement | null>>([])
   useEffect(() => {
     if (!sent || seconds <= 0) return
@@ -19,8 +20,15 @@ export function PasswordlessLoginForm({ onAuthenticated, onClose, scope = 'custo
   }, [sent, seconds])
   async function sendCode() {
     setError('')
-    try { await authApi.requestCode(email, scope); setSent(true); setSeconds(600) }
-    catch { setError('We could not send a code. Check the email address and try again.') }
+    try {
+      const response = await authApi.requestCode(email.trim(), scope)
+      setDevelopmentCode(response.data.developmentCode ?? '')
+      setSent(true)
+      setSeconds(600)
+    } catch (requestError) {
+      const message = (requestError as { response?: { data?: { detail?: string } } }).response?.data?.detail
+      setError(message ?? 'We could not send a code. Check the email address and try again.')
+    }
   }
   async function verify() {
     setError('')
@@ -38,6 +46,7 @@ export function PasswordlessLoginForm({ onAuthenticated, onClose, scope = 'custo
       <button type="submit">Send Login Code</button>
     </form> : <form onSubmit={(event) => { event.preventDefault(); void verify() }}>
       <p>Code sent to {email}. Expires in {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}.</p>
+      {developmentCode && <p role="status">Development code: <strong>{developmentCode}</strong></p>}
       <div className="otp">
         {digits.map((digit, index) => <input key={index} ref={(element) => { refs.current[index] = element }} inputMode="numeric" maxLength={1} value={digit} aria-label={`Digit ${index + 1}`} onPaste={(event) => {
           event.preventDefault()

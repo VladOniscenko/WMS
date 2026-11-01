@@ -179,6 +179,7 @@ public sealed class AgendaModule : IModule
         endpoints.MapPost("/api/agenda/reservations", CreateReservationAsync).RequireAuthorization();
         endpoints.MapGet("/api/agenda/reservations/my", MyReservationsAsync).RequireAuthorization();
         endpoints.MapGet("/api/agenda/reservations", ReservationsAsync).RequireAuthorization();
+        endpoints.MapPatch("/api/agenda/reservations/{id:guid}", UpdateReservationAsync).RequireAuthorization();
         endpoints.MapPatch("/api/agenda/reservations/{id:guid}/cancel", CancelAsync).RequireAuthorization();
         endpoints.MapPut("/api/agenda/resources/{resourceId:guid}/schedule", SetScheduleAsync).RequireAuthorization();
     }
@@ -228,6 +229,21 @@ public sealed class AgendaModule : IModule
         var reservation = await repository.GetByIdAsync(id, ct);
         if (reservation is null || reservation.BusinessId != tenant.BusinessId) return Results.NotFound();
         reservation.Status = nameof(ReservationStatus.Cancelled);
+        await repository.ReplaceAsync(reservation, ct);
+        return Results.Ok(reservation);
+    }
+
+    private static async Task<IResult> UpdateReservationAsync(
+        Guid id, Reservation input, ITenantProvider tenant,
+        IMongoRepository<Reservation> repository, CancellationToken ct)
+    {
+        var reservation = await repository.GetByIdAsync(id, ct);
+        if (reservation is null || tenant.BusinessId is not Guid businessId || reservation.BusinessId != businessId)
+            return Results.NotFound();
+        if (input.Status is not (nameof(ReservationStatus.Pending) or nameof(ReservationStatus.Confirmed) or nameof(ReservationStatus.Completed)))
+            return Results.BadRequest("Unsupported reservation status.");
+        reservation.Status = input.Status;
+        reservation.Notes = input.Notes;
         await repository.ReplaceAsync(reservation, ct);
         return Results.Ok(reservation);
     }

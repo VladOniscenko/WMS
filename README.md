@@ -1,4 +1,4 @@
-# StudioPlatform
+# WMS — Website Management System
 
 ## Run locally with Docker
 
@@ -12,10 +12,13 @@ Start the full stack from the repository root:
 docker compose up --build
 ```
 
-Open the frontend in a browser:
+Open the WMS workspace in a browser:
 
-- http://localhost:3000/?site=glow-center
-- http://localhost:3000/?site=glow-south
+- http://localhost:3000/manage
+
+After creating and publishing a website, visit it at:
+
+- http://localhost:3000/sites/{your-slug}
 
 The frontend proxies API requests to the backend container, so no frontend
 configuration change is needed. MongoDB and Redis stay private to Compose,
@@ -34,7 +37,7 @@ Use the backend container logs for startup and runtime diagnostics:
 docker compose logs -f backend
 ```
 
-Developer control panel:
+Platform administration:
 
 - http://localhost:3000/admin
 - Seeded developer email: `vladislavssmine@gmail.com`
@@ -44,7 +47,17 @@ Developer control panel:
 docker compose logs -f backend
 ```
 
-Only the seeded database identity with the `Developer` role can access business and website management APIs.
+The platform administrator can inspect every business and website. Business
+owners manage only their own businesses, while invited collaborators are
+recorded per website.
+
+Business owner onboarding:
+
+- Open http://localhost:3000/manage
+- Request a passwordless code with the `business-admin` scope.
+- Create a business, then build one or more websites for it.
+- Each website can have its own slug/domain, enabled modules, theme color,
+  hero content, and service assignments.
 
 Stop the stack:
 
@@ -72,7 +85,7 @@ dotnet test
 Build the frontend:
 
 ```bash
-cd frontend/studio-web
+cd frontend/wms-web
 npm install
 npm run build
 ```

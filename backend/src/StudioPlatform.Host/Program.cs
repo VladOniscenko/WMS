@@ -10,6 +10,7 @@ using System.Text.Json.Serialization;
 using StudioPlatform.Shared.Infrastructure;
 using StudioPlatform.Shared.Modules;
 using StudioPlatform.Shared.Tenancy;
+using Microsoft.AspNetCore.StaticFiles;
 
 var builder = WebApplication.CreateBuilder(args);
 BsonSerializer.RegisterSerializer(new GuidSerializer(MongoDB.Bson.GuidRepresentation.Standard));
@@ -36,12 +37,22 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("DeveloperOnly", policy =>
         policy.RequireAssertion(context =>
             context.User.IsInRole("Developer")));
+    options.AddPolicy("BusinessManager", policy =>
+        policy.RequireAssertion(context =>
+            context.User.IsInRole("Developer") || context.User.IsInRole("BusinessAdmin")));
 });
 if (builder.Environment.IsDevelopment())
     builder.Services.AddHostedService<DemoDataSeeder>();
 
 var app = builder.Build();
 
+Directory.CreateDirectory(Path.Combine(app.Environment.ContentRootPath, "uploads"));
+app.UseStaticFiles(new StaticFileOptions
+{
+    RequestPath = "/uploads",
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(
+        Path.Combine(app.Environment.ContentRootPath, "uploads"))
+});
 app.UseMiddleware<TenantResolutionMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();

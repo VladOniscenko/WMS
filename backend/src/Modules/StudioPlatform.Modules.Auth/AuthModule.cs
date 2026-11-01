@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using StudioPlatform.Shared.Caching;
@@ -120,6 +121,7 @@ public sealed class AuthModule : IModule
     public void RegisterModule(IServiceCollection services, IConfiguration configuration)
     {
         services.AddMongoRepository<AuthIdentity>("studio_auth");
+        services.AddMongoRepository<UserProfile>("studio_auth");
         services.AddSingleton<IOtpService, RedisOtpService>();
         services.AddSingleton<IEmailSender>(provider =>
             string.Equals(configuration["Email:Provider"], "smtp", StringComparison.OrdinalIgnoreCase)
@@ -136,17 +138,59 @@ public sealed class AuthModule : IModule
                 Results.Ok(user.Claims.GroupBy(claim => claim.Type)
                     .ToDictionary(group => group.Key, group => group.Select(claim => claim.Value).ToArray())))
             .RequireAuthorization();
+        endpoints.MapGet("/api/onboarding/profile", GetProfileAsync).RequireAuthorization();
+        endpoints.MapPut("/api/onboarding/profile", SaveProfileAsync).RequireAuthorization();
+    }
+
+    private static async Task<IResult> GetProfileAsync(
+        ClaimsPrincipal user, IMongoRepository<UserProfile> profiles,
+        CancellationToken cancellationToken)
+    {
+        var email = user.FindFirstValue(ClaimTypes.Email) ?? user.FindFirstValue("email");
+        if (string.IsNullOrWhiteSpace(email)) return Results.Unauthorized();
+        var profile = await profiles.FirstOrDefaultAsync(
+            item => item.Email == email.ToLowerInvariant(), cancellationToken);
+        return profile is null ? Results.NotFound() : Results.Ok(profile);
+    }
+
+    private static async Task<IResult> SaveProfileAsync(
+        UserProfile input, ClaimsPrincipal user, IMongoRepository<UserProfile> profiles,
+        CancellationToken cancellationToken)
+    {
+        var email = user.FindFirstValue(ClaimTypes.Email) ?? user.FindFirstValue("email");
+        var subject = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+        if (string.IsNullOrWhiteSpace(email) || !Guid.TryParse(subject, out var id))
+            return Results.Unauthorized();
+        var normalizedEmail = email.ToLowerInvariant();
+        var profile = await profiles.FirstOrDefaultAsync(
+            item => item.Email == normalizedEmail, cancellationToken) ?? new UserProfile
+            {
+                Id = id,
+                Email = normalizedEmail
+            };
+        profile.FirstName = input.FirstName.Trim();
+        profile.LastName = input.LastName.Trim();
+        profile.Phone = input.Phone?.Trim();
+        profile.Address = input.Address;
+        profile.OnboardingCompleted = !string.IsNullOrWhiteSpace(profile.FirstName) &&
+            !string.IsNullOrWhiteSpace(profile.LastName);
+        if (profile.Id == id && await profiles.GetByIdAsync(id, cancellationToken) is null)
+            await profiles.InsertAsync(profile, cancellationToken);
+        else
+            await profiles.ReplaceAsync(profile, cancellationToken);
+        return Results.Ok(profile);
     }
 
     private static async Task<IResult> RequestCodeAsync(
         RequestCodeRequest request, ITenantProvider tenant, IOtpService otp,
         IRedisCacheService cache,
         IEmailSender emailSender, IMongoRepository<AuthIdentity> identities,
+        IHostEnvironment environment,
         CancellationToken cancellationToken)
     {
         var businessId = tenant.BusinessId ?? Guid.Empty;
         if (!Regex.IsMatch(request.Email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$") ||
-            request.Scope is not ("customer" or "employee" or "developer"))
+            request.Scope is not ("customer" or "employee" or "business-admin" or "developer"))
             return Results.BadRequest("Valid business, email, and scope are required.");
         if (request.Scope == "developer" &&
             await identities.FirstOrDefaultAsync(
@@ -162,7 +206,9 @@ public sealed class AuthModule : IModule
                 $"auth:otp:scope:{businessId}:{request.Email.ToLowerInvariant()}",
                 request.Scope, TimeSpan.FromMinutes(10));
             await emailSender.SendOtpAsync(request.Email, code, cancellationToken);
-            return Results.Ok(new { message = "Code sent." });
+            return environment.IsDevelopment()
+                ? Results.Ok(new { message = "Code sent.", developmentCode = code })
+                : Results.Ok(new { message = "Code sent." });
         }
         catch (InvalidOperationException exception)
         {
@@ -194,6 +240,7 @@ public sealed class AuthModule : IModule
                 {
                     "developer" => "Developer",
                     "employee" => "Employee",
+                    "business-admin" => "BusinessAdmin",
                     _ => "Customer"
                 }]
             };

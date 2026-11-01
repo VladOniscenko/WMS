@@ -29,12 +29,12 @@
    - `StudioPlatform.Modules.Employees`
    - `StudioPlatform.Modules.Agenda`
 6. Add all C# projects to `StudioPlatform.sln` and reference them in `StudioPlatform.Host`. Each module project may **only** reference `StudioPlatform.Shared`.
-7. Inside `/frontend`, initialize a Vite React TypeScript project: `npm create vite@latest studio-web -- --template react-ts`.
+7. Inside `/frontend`, initialize the WMS Web Vite React TypeScript project: `npm create vite@latest wms-web -- --template react-ts`.
 
 **Acceptance Criteria:**
 
 - Running `dotnet build` inside `/backend` succeeds with 0 errors.
-- Running `npm run build` inside `/frontend/studio-web` succeeds with 0 errors.
+- Running `npm run build` inside `/frontend/wms-web` succeeds with 0 errors.
 - No module project directly references another module project (strictly decoupled).
 
 ---
@@ -343,11 +343,11 @@
 ### [TICKET-013] Frontend Modular Package Architecture & Multi-Tenant Context
 
 **Agent Role:** Frontend Architect Agent
-**Description:** Structure `/frontend/studio-web` so each feature module (`auth`, `customers`, `employees`, `agenda`, `cms`) lives in an isolated, portable package/directory (`src/modules/<module-name>`) with zero cross-module imports, communicating via a shared frontend SDK (`src/shared`).
+**Description:** Structure `/frontend/wms-web` so each feature module (`auth`, `customers`, `employees`, `agenda`, `cms`) lives in an isolated, portable package/directory (`src/modules/<module-name>`) with zero cross-module imports, communicating via a shared frontend SDK (`src/shared`).
 
 **Tasks:**
 
-1. Install dependencies in `/frontend/studio-web`: `react-router-dom`, `@tanstack/react-query`, `axios`, `lucide-react`, ` tailwindcss`.
+1. Install dependencies in `/frontend/wms-web`: `react-router-dom`, `@tanstack/react-query`, `axios`, `lucide-react`, ` tailwindcss`.
 2. Create the decoupled folder structure inside `src/`:
    - `src/shared/api/httpClient.ts` - Axios instance that automatically attaches `X-Business-Id`, `X-Website-Id`, and `Authorization: Bearer <token>` headers.
    - `src/shared/tenancy/TenantProvider.tsx` - On app load, reads the current hostname or `?site=slug` query param, calls `GET /api/websites/resolve`, applies CSS variables for `ThemeConfig`, and exposes `{ businessId, websiteId, enabledModules }`.
